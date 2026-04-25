@@ -1,0 +1,8 @@
+# Normalize line endings to LF so PowerShell and WSL see the same working tree
+* text=auto eol=lf
+# Shell scripts must use LF so they run in WSL/Linux (shebang "required file not found" fix)
+*.sh text eol=lf
+# Pulumi project file read by shell scripts (avoid \r in docker tag)
+Pulumi.yaml text eol=lf
+# Dockerfile heredocs break with CRLF (syntax error in RUN)
+Dockerfile text eol=lf

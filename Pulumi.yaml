@@ -1,0 +1,4 @@
+name: azure-domain-services
+description: Entra ID Domain Services and associated resources
+runtime:
+  name: python

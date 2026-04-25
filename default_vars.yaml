@@ -1,0 +1,30 @@
+# Merge source for stack_menu.py checklist / seeding: __REQUIRED__ / __OPTIONAL__.
+# Keys without a provider prefix are namespaced with the project name from Pulumi.yaml (azure-domain-services).
+# See Pulumi.sample.yaml for a full committed example.
+
+azure:subscriptionId: __REQUIRED__
+azure:tenantId: __REQUIRED__
+azure-native:location: __REQUIRED__
+rg_prefix: __REQUIRED__
+aadds_name: __REQUIRED__
+aadds_vnet_space: __REQUIRED__          # Must be /24 (subnets are derived in __main__.py)
+aadds_dns_servers: __REQUIRED__         # Two AADDS DC resolver IPs in the AADDS VNET
+aadds-pfx-cert-path: __REQUIRED__      # Path to LDAPS .pfx on disk (relative to repo or absolute); not in Key Vault
+on_prem_source_ip_range: __REQUIRED__
+pa_hub_stack: __REQUIRED__              # e.g. org/azure-pa-hub-network/dev
+ldap_connections: __REQUIRED__          # list of external LDAPS source IPs (strings)
+ms01_vm:
+  vm_name: __REQUIRED__
+  admin_username: azadmin
+key_vault:
+  name: __REQUIRED__
+  keys:
+    - name: aadds-pfx-password
+      description: PFX password for AADDS LDAPS certificate
+    - name: aadds-ms01-admin-pw
+      description: Local admin password for MS01 management VM
+  iam_groups: __OPTIONAL__  # optional: array of Entra group object IDs for Key Vault RBAC
+aadds_ms_nsg_rules: __REQUIRED__        # list of NSG rule objects for the AADDS management VNET subnet
+aadds_nsg_rules: __REQUIRED__           # list of NSG rule objects for the AADDS domain services subnet
+route_tables: __REQUIRED__              # object with AaddsMsToFw list
+peerings: __REQUIRED__                  # list of peering objects; includes hub and intra-AADDS peerings

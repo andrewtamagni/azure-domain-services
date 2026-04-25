@@ -1,5 +1,6 @@
-*.pyc
-venv/
-Pulumi.prod.yaml
-Pulumi.yaml
-default_vars.py
+__pycache__/
+*.pfx
+*.json
+Pulumi.*.yaml
+# Allow the sanitized example to be committed to GitHub
+!Pulumi.sample.yaml

@@ -1,0 +1,161 @@
+# -----------------------------------------------------------------------------
+# SAMPLE stack config for project "azure-domain-services" (see Pulumi.yaml).
+# Create Pulumi.<yourstack>.yaml with stack_menu.py (Create new stack), or copy
+# this file to Pulumi.<yourstack>.yaml and replace ALL placeholder values.
+#
+# No private keys belong in this file. LDAPS PFX bytes are read from disk (aadds-pfx-cert-path);
+# LDAPS PFX password and VM admin password are read from Azure Key Vault.
+# -----------------------------------------------------------------------------
+
+config:
+  # --- Azure provider / subscription (replace with your IDs) ---
+  azure:subscriptionId: 00000000-0000-0000-0000-000000000000
+  azure:tenantId: 00000000-0000-0000-0000-000000000000
+  azure-native:location: westus
+
+  # --- Core AADDS identifiers ---
+  azure-domain-services:rg_prefix: TEST-AADDS
+  azure-domain-services:aadds_name: az.contoso.edu
+  # AADDS split model expects /24 and auto-derives two /25 VNets and four /26 subnets.
+  azure-domain-services:aadds_vnet_space: 10.13.0.0/24
+  azure-domain-services:aadds_dns_servers:
+    - 10.10.101.132
+    - 10.10.101.133
+  azure-domain-services:on_prem_source_ip_range: 10.10.0.0/16
+  # Stack reference to hub project (same pattern used in azure-spoke-network).
+  # This stack reads `hub_vnet_resource_id`, `hub_vnet_cidr`, and
+  # `trust_nic_private_ip` from the referenced hub stack outputs.
+  azure-domain-services:pa_hub_stack: org/azure-pa-hub-network/dev
+
+  # External LDAPS source addresses consumed by NSG refs (ldap_connections.0, ldap_connections.1, ...)
+  azure-domain-services:ldap_connections:
+    - 10.14.113.10
+    - 10.14.113.11
+
+  # Path to LDAPS PKCS#12 file on the machine running `pulumi up` (relative to repo root or absolute).
+  azure-domain-services:aadds-pfx-cert-path: azdev.pfx
+
+  # --- Management VM ---
+  azure-domain-services:ms01_vm:
+    vm_name: aaddsms01
+    admin_username: azadmin
+
+  # --- Key Vault configuration ---
+  azure-domain-services:key_vault:
+    name: test-aadds-kv-replace-me
+    keys:
+      - name: aadds-pfx-password
+        description: PFX password for AADDS LDAPS certificate
+      - name: aadds-ms01-admin-pw
+        description: Local admin password for MS01 management VM
+    # Optional: Azure AD group object IDs for Key Vault RBAC (leave [] or use a list)
+    iam_groups: []
+
+  # --- NSG rules: AADDS management subnet ---
+  azure-domain-services:aadds_ms_nsg_rules:
+    - name: Allow-RDP-CorpNetSaw
+      protocol: Tcp
+      source_port_range: "*"
+      destination_port_range: "3389"
+      source_address_prefix: CorpNetSaw
+      destination_address_prefix: "*"
+      access: Allow
+      priority: 201
+      direction: Inbound
+    - name: Allow-RDP-OnPrem
+      protocol: Tcp
+      source_port_range: "*"
+      destination_port_range: "3389"
+      source_address_prefix_ref: on_prem_source_ip_range
+      destination_address_prefix: "*"
+      access: Allow
+      priority: 211
+      direction: Inbound
+
+  # --- NSG rules: AADDS domain services subnet ---
+  azure-domain-services:aadds_nsg_rules:
+    - name: Allow-PS-Remoting
+      protocol: Tcp
+      source_port_range: "*"
+      destination_port_range: "5986"
+      source_address_prefix: AzureActiveDirectoryDomainServices
+      destination_address_prefix: "*"
+      access: Allow
+      priority: 301
+      direction: Inbound
+    - name: Allow-LDAPS-Inbound-From-IP_OnPrem
+      protocol: Tcp
+      source_port_range: "*"
+      destination_port_range: "636"
+      source_address_prefix_ref: on_prem_source_ip_range
+      destination_address_prefix: "*"
+      access: Allow
+      priority: 311
+      direction: Inbound
+    - name: Allow-LDAPS-Inbound-From-IP_1
+      protocol: Tcp
+      source_port_range: "*"
+      destination_port_range: "636"
+      source_address_prefix_ref: ldap_connections.0
+      destination_address_prefix: "*"
+      access: Allow
+      priority: 312
+      direction: Inbound
+    - name: Allow-LDAPS-Inbound-From-IP_2
+      protocol: Tcp
+      source_port_range: "*"
+      destination_port_range: "636"
+      source_address_prefix_ref: ldap_connections.1
+      destination_address_prefix: "*"
+      access: Allow
+      priority: 313
+      direction: Inbound
+
+  # --- Route tables ---
+  azure-domain-services:route_tables:
+    AaddsMsToFw:
+      - name: TEST-MS-VNET-to-FW_Route1
+        address_prefix: 0.0.0.0/0
+        next_hop_type: VirtualAppliance
+        next_hop_ip_ref: trust_priv_ip
+      - name: TEST-MS-VNET-to-FW_Route2
+        address_prefix_ref: on_prem_source_ip_range
+        next_hop_type: VirtualNetworkGateway
+      - name: TEST-MS-VNET-to-FW_Route3
+        address_prefix: 192.168.0.0/16
+        next_hop_type: VirtualNetworkGateway
+      - name: TEST-MS-VNET-to-FW_Route4
+        address_prefix: 172.16.0.0/12
+        next_hop_type: VirtualNetworkGateway
+      - name: TEST-MS-VNET-to-FW_Route5
+        address_prefix: 10.0.0.0/8
+        next_hop_type: VirtualAppliance
+        next_hop_ip_ref: trust_priv_ip
+      - name: TEST-MS-VNET-to-FW_Route6
+        address_prefix_ref: hub_vnet_space
+        next_hop_type: VirtualAppliance
+        next_hop_ip_ref: trust_priv_ip
+
+  # --- Peerings ---
+  azure-domain-services:peerings:
+    - name: TEST-MS-VNET-to-HUB
+      local_vnet_ref: aadds_ms
+      remote_vnet_ref: hub
+      allow_forwarded_traffic: true
+      allow_gateway_transit: false
+      allow_virtual_network_access: true
+      use_remote_gateways: true
+    - name: TEST-MS-VNET-to-AADDS-VNET
+      local_vnet_ref: aadds_ms
+      remote_vnet_ref: aadds
+      allow_forwarded_traffic: true
+      allow_gateway_transit: false
+      allow_virtual_network_access: true
+      use_remote_gateways: false
+    - name: TEST-VNET-to-AADDS-MS-VNET
+      local_vnet_ref: aadds
+      remote_vnet_ref: aadds_ms
+      allow_forwarded_traffic: true
+      allow_gateway_transit: false
+      allow_virtual_network_access: true
+      use_remote_gateways: false
